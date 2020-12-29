@@ -1,0 +1,36 @@
+body {
+    background-color: #1A1A1A;
+    color: #E6E6E6;
+    font-family: sans-serif;
+}
+
+.container {
+    text-align: center;
+    margin-top: 3em;
+}
+
+.title {
+    font-size: 48px;
+    margin-bottom: 1em;
+}
+
+.centered {
+    margin: 0 auto;
+    display: block;
+}
+
+.button-panel {
+    display: inline-grid;
+    align-items: center;
+    column-gap: 2rem;
+    grid-template-columns: auto auto;
+}
+
+.explanation {
+    margin-top: 2rem;
+    width: 50%;
+    min-width: 300px;
+    max-width: 800px;
+    font-size: 1.4rem;
+    text-align: justify;
+}
