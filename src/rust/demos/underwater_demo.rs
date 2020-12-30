@@ -1,15 +1,14 @@
 use crate::AppRoute;
 use kira::{
-    arrangement::{Arrangement, ArrangementId, LoopArrangementSettings},
+    arrangement::{Arrangement, ArrangementHandle, LoopArrangementSettings},
     instance::{InstanceSettings, StopInstanceSettings},
     manager::AudioManager,
     mixer::{
-        effect::filter::{Filter, FilterSettings},
-        SubTrackId,
+        effect::filter::{Filter, FilterSettings}, TrackHandle,
     },
-    parameter::{Mapping, ParameterId, Tween},
+    parameter::{Mapping, ParameterHandle, Tween},
     playable::PlayableSettings,
-    sequence::{Sequence, SequenceInstanceId},
+    sequence::{Sequence, SequenceInstanceHandle},
     sound::Sound,
     Frame, Tempo, Value,
 };
@@ -26,15 +25,15 @@ respond to the change in the \"underwater\" parameter.";
 pub struct UnderwaterDemo {
     link: ComponentLink<Self>,
 
-    bass: Option<ArrangementId>,
-    pad: Option<ArrangementId>,
-    lead: Option<ArrangementId>,
-    drums: Option<ArrangementId>,
+    bass: Option<ArrangementHandle>,
+    pad: Option<ArrangementHandle>,
+    lead: Option<ArrangementHandle>,
+    drums: Option<ArrangementHandle>,
 
     manager: AudioManager,
-    lead_track_id: SubTrackId,
-    underwater_parameter_id: ParameterId,
-    sequence_id: Option<SequenceInstanceId>,
+    lead_track_handle: TrackHandle,
+    underwater_parameter_handle: ParameterHandle,
+    sequence_handle: Option<SequenceInstanceHandle<()>>,
 
     underwater: bool,
     loaded: bool,
@@ -73,13 +72,12 @@ impl Component for UnderwaterDemo {
         });
 
         let mut manager = AudioManager::new(Default::default()).unwrap();
-        let lead_track_id = manager.add_sub_track(Default::default()).unwrap();
-        let underwater_parameter_id = manager.add_parameter(0.0).unwrap();
-        manager
-            .add_effect_to_track(
-                lead_track_id,
+        let mut lead_track_handle = manager.add_sub_track(Default::default()).unwrap();
+        let underwater_parameter_handle = manager.add_parameter(0.0).unwrap();
+        lead_track_handle
+            .add_effect(
                 Filter::new(FilterSettings::new().cutoff(Value::Parameter(
-                    underwater_parameter_id,
+                    underwater_parameter_handle.id(),
                     Mapping {
                         input_range: (0.0, 1.0),
                         output_range: (8000.0, 2000.0),
@@ -97,9 +95,9 @@ impl Component for UnderwaterDemo {
             lead: None,
             drums: None,
             manager,
-            lead_track_id,
-            underwater_parameter_id,
-            sequence_id: None,
+            lead_track_handle,
+            underwater_parameter_handle,
+            sequence_handle: None,
             underwater: false,
             loaded: false,
         }
@@ -118,7 +116,7 @@ impl Component for UnderwaterDemo {
                     ))
                     .and_then(|x| {
                         self.manager
-                            .add_arrangement(Arrangement::new_loop(x, Default::default()))
+                            .add_arrangement(Arrangement::new_loop(x.id(), Default::default()))
                     })
                     .ok();
                 self.check_loaded()
@@ -134,7 +132,7 @@ impl Component for UnderwaterDemo {
                     ))
                     .and_then(|x| {
                         self.manager
-                            .add_arrangement(Arrangement::new_loop(x, Default::default()))
+                            .add_arrangement(Arrangement::new_loop(x.id(), Default::default()))
                     })
                     .ok();
                 self.check_loaded()
@@ -150,8 +148,9 @@ impl Component for UnderwaterDemo {
                     ))
                     .and_then(|x| {
                         self.manager.add_arrangement(Arrangement::new_loop(
-                            x,
-                            LoopArrangementSettings::new().default_track(self.lead_track_id),
+                            x.id(),
+                            LoopArrangementSettings::new()
+                                .default_track(self.lead_track_handle.index()),
                         ))
                     })
                     .ok();
@@ -168,30 +167,27 @@ impl Component for UnderwaterDemo {
                     ))
                     .and_then(|x| {
                         self.manager
-                            .add_arrangement(Arrangement::new_loop(x, Default::default()))
+                            .add_arrangement(Arrangement::new_loop(x.id(), Default::default()))
                     })
                     .ok();
                 self.check_loaded()
             }
             Self::Message::PlayButtonClick => {
-                if let Some(sequence_id) = self.sequence_id {
-                    self.manager
-                        .stop_sequence_and_instances(
-                            sequence_id,
-                            StopInstanceSettings::new().fade_tween(Tween::linear(1.0)),
-                        )
+                if let Some(ref mut sequence_handle) = self.sequence_handle {
+                    sequence_handle
+                        .stop_sequence_and_instances(StopInstanceSettings::new().fade_tween(Tween::linear(1.0)))
                         .ok();
-                    self.sequence_id = None;
+                    self.sequence_handle = None;
                 } else {
-                    let sequence_id = self
+                    let sequence_handle = self
                         .manager
                         .start_sequence(
                             {
                                 let mut sequence = Sequence::<()>::new(Default::default());
                                 sequence.play(
-                                    self.drums.unwrap(),
+                                    self.drums.as_ref().unwrap().id(),
                                     InstanceSettings::new().volume(Value::Parameter(
-                                        self.underwater_parameter_id,
+                                        self.underwater_parameter_handle.id(),
                                         Mapping {
                                             input_range: (0.0, 1.0),
                                             output_range: (1.0, 0.0),
@@ -199,31 +195,31 @@ impl Component for UnderwaterDemo {
                                         },
                                     )),
                                 );
-                                sequence.play(self.bass.unwrap(), Default::default());
+                                sequence.play(self.bass.as_ref().unwrap().id(), Default::default());
                                 sequence.play(
-                                    self.pad.unwrap(),
-                                    InstanceSettings::new().volume(self.underwater_parameter_id),
+                                    self.pad.as_ref().unwrap().id(),
+                                    InstanceSettings::new()
+                                        .volume(self.underwater_parameter_handle.id()),
                                 );
-                                sequence.play(self.lead.unwrap(), Default::default());
+                                sequence.play(self.lead.as_ref().unwrap().id(), Default::default());
                                 sequence
                             },
                             Default::default(),
                         )
-                        .ok()
-                        .map(|(id, _)| id);
-                    self.sequence_id = sequence_id;
+                        .ok();
+                    self.sequence_handle = sequence_handle;
                 }
 
                 true
             }
             Self::Message::SubmergeButtonClick => {
                 if self.underwater {
-                    self.manager
-                        .set_parameter(self.underwater_parameter_id, 0.0, Some(4.0.into()))
+                    self.underwater_parameter_handle
+                        .set(0.0, Some(4.0.into()))
                         .ok();
                 } else {
-                    self.manager
-                        .set_parameter(self.underwater_parameter_id, 1.0, Some(4.0.into()))
+                    self.underwater_parameter_handle
+                        .set(1.0, Some(4.0.into()))
                         .ok();
                 }
                 self.underwater = !self.underwater;
@@ -246,7 +242,7 @@ impl Component for UnderwaterDemo {
                     <div class="container">
                         <div class="button-panel">
                             <button onclick=self.link.callback(|_| Self::Message::PlayButtonClick)>
-                                {if self.sequence_id.is_none() { "Play" } else { "Stop" }}
+                                {if self.sequence_handle.is_none() { "Play" } else { "Stop" }}
                             </button>
                             <button onclick=self.link.callback(|_| Self::Message::SubmergeButtonClick)>
                                 {if self.underwater { "Resurface" } else { "Submerge" }}
