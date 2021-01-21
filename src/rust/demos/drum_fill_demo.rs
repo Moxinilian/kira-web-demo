@@ -244,7 +244,17 @@ impl Component for DrumFillDemo {
                 }
                 true
             }
-            Message::PlayFillClick => true,
+            Message::PlayFillClick => {
+                match self.playback_state {
+                    PlaybackState::PlayingLoop(beat) => {
+                        let fill = beat.fill();
+                        self.playback_state = PlaybackState::QueueingFill(beat, fill);
+                        self.loop_sequence = Some(self.start_fill_and_loop_sequence(fill));
+                    }
+                    _ => {}
+                }
+                true
+            }
             Message::PopEvents => {
                 let mut should_render = false;
                 if let Some(beat_tracker) = &mut self.beat_tracker {
@@ -259,6 +269,25 @@ impl Component for DrumFillDemo {
                             | PlaybackState::PlayingFill(current_beat, _) => {
                                 *current_beat = *beat;
                                 should_render = true;
+                            }
+                        }
+                    }
+                }
+                if let Some(sequence) = &mut self.loop_sequence {
+                    while let Some(event) = sequence.pop_event() {
+                        match event {
+                            DrumFillEvent::Start => {
+                                if let PlaybackState::QueueingFill(beat, fill) = self.playback_state
+                                {
+                                    self.playback_state = PlaybackState::PlayingFill(beat, fill);
+                                    should_render = true;
+                                }
+                            }
+                            DrumFillEvent::Finish => {
+                                if let PlaybackState::PlayingFill(beat, _) = self.playback_state {
+                                    self.playback_state = PlaybackState::PlayingLoop(beat);
+                                    should_render = true;
+                                }
                             }
                         }
                     }
@@ -286,6 +315,9 @@ impl Component for DrumFillDemo {
                                     PlaybackState::Stopped => "Play",
                                     _ => "Stop",
                                 } }
+                            </button>
+                            <button onclick=self.link.callback(|_| Self::Message::PlayFillClick)>
+                                { "Play fill" }
                             </button>
                         </div>
                         <div class="centered">
@@ -350,6 +382,45 @@ impl DrumFillDemo {
                         SequenceSettings::new().groups(GroupSet::new().add(&self.group)),
                     );
                     sequence.wait_for_interval(1.0);
+                    sequence.start_loop();
+                    sequence.play(self.loop_sound.as_ref().unwrap(), Default::default());
+                    sequence.wait(Duration::Beats(4.0));
+                    sequence
+                },
+                SequenceInstanceSettings::new().metronome(&self.metronome),
+            )
+            .unwrap()
+    }
+
+    fn start_fill_and_loop_sequence(
+        &mut self,
+        fill: DrumFill,
+    ) -> SequenceInstanceHandle<DrumFillEvent> {
+        let previous_loop_sequence = self.loop_sequence.take().unwrap();
+        self.manager
+            .start_sequence(
+                {
+                    let mut sequence = Sequence::new(
+                        SequenceSettings::new().groups(GroupSet::new().add(&self.group)),
+                    );
+                    sequence.wait_for_interval(fill.start_interval());
+                    sequence.emit(DrumFillEvent::Start);
+                    sequence
+                        .stop_sequence_and_instances(&previous_loop_sequence, Default::default());
+                    sequence.play(
+                        {
+                            match fill {
+                                DrumFill::TwoBeat => &self.fill_2b,
+                                DrumFill::ThreeBeat => &self.fill_3b,
+                                DrumFill::FourBeat => &self.fill_4b,
+                            }
+                            .as_ref()
+                            .unwrap()
+                        },
+                        Default::default(),
+                    );
+                    sequence.wait_for_interval(4.0);
+                    sequence.emit(DrumFillEvent::Finish);
                     sequence.start_loop();
                     sequence.play(self.loop_sound.as_ref().unwrap(), Default::default());
                     sequence.wait(Duration::Beats(4.0));
