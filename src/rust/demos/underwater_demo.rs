@@ -1,15 +1,15 @@
 use crate::AppRoute;
 use kira::{
-    arrangement::{Arrangement, ArrangementHandle, LoopArrangementSettings},
+    arrangement::{handle::ArrangementHandle, Arrangement, LoopArrangementSettings},
     instance::{InstanceSettings, StopInstanceSettings},
     manager::AudioManager,
     mixer::{
-        effect::filter::{Filter, FilterSettings}, TrackHandle,
+        effect::filter::{Filter, FilterSettings},
+        handle::TrackHandle,
     },
-    parameter::{Mapping, ParameterHandle, Tween},
-    playable::PlayableSettings,
-    sequence::{Sequence, SequenceInstanceHandle},
-    sound::Sound,
+    parameter::{handle::ParameterHandle, tween::Tween, Mapping, ParameterSettings},
+    sequence::{handle::SequenceInstanceHandle, Sequence},
+    sound::{Sound, SoundSettings},
     Frame, Tempo, Value,
 };
 use yew::prelude::*;
@@ -73,7 +73,9 @@ impl Component for UnderwaterDemo {
 
         let mut manager = AudioManager::new(Default::default()).unwrap();
         let mut lead_track_handle = manager.add_sub_track(Default::default()).unwrap();
-        let underwater_parameter_handle = manager.add_parameter(0.0).unwrap();
+        let underwater_parameter_handle = manager
+            .add_parameter(ParameterSettings::new().value(0.0))
+            .unwrap();
         lead_track_handle
             .add_effect(
                 Filter::new(FilterSettings::new().cutoff(Value::Parameter(
@@ -111,14 +113,14 @@ impl Component for UnderwaterDemo {
                     .add_sound(Sound::from_frames(
                         rate,
                         frames,
-                        PlayableSettings::new()
-                            .semantic_duration(Tempo(85.0).beats_to_seconds(16.0)),
+                        SoundSettings::new().semantic_duration(Tempo(85.0).beats_to_seconds(16.0)),
                     ))
-                    .and_then(|x| {
+                    .ok()
+                    .and_then(|sound| {
                         self.manager
-                            .add_arrangement(Arrangement::new_loop(x.id(), Default::default()))
-                    })
-                    .ok();
+                            .add_arrangement(Arrangement::new_loop(&sound, Default::default()))
+                            .ok()
+                    });
                 self.check_loaded()
             }
             Self::Message::LoadedPad(rate, frames) => {
@@ -127,14 +129,14 @@ impl Component for UnderwaterDemo {
                     .add_sound(Sound::from_frames(
                         rate,
                         frames,
-                        PlayableSettings::new()
-                            .semantic_duration(Tempo(85.0).beats_to_seconds(16.0)),
+                        SoundSettings::new().semantic_duration(Tempo(85.0).beats_to_seconds(16.0)),
                     ))
-                    .and_then(|x| {
+                    .ok()
+                    .and_then(|sound| {
                         self.manager
-                            .add_arrangement(Arrangement::new_loop(x.id(), Default::default()))
-                    })
-                    .ok();
+                            .add_arrangement(Arrangement::new_loop(&sound, Default::default()))
+                            .ok()
+                    });
                 self.check_loaded()
             }
             Self::Message::LoadedLead(rate, frames) => {
@@ -143,17 +145,18 @@ impl Component for UnderwaterDemo {
                     .add_sound(Sound::from_frames(
                         rate,
                         frames,
-                        PlayableSettings::new()
-                            .semantic_duration(Tempo(85.0).beats_to_seconds(16.0)),
+                        SoundSettings::new().semantic_duration(Tempo(85.0).beats_to_seconds(16.0)),
                     ))
-                    .and_then(|x| {
-                        self.manager.add_arrangement(Arrangement::new_loop(
-                            x.id(),
-                            LoopArrangementSettings::new()
-                                .default_track(self.lead_track_handle.index()),
-                        ))
-                    })
-                    .ok();
+                    .ok()
+                    .and_then(|sound| {
+                        self.manager
+                            .add_arrangement(Arrangement::new_loop(
+                                &sound,
+                                LoopArrangementSettings::new()
+                                    .default_track(self.lead_track_handle.index()),
+                            ))
+                            .ok()
+                    });
                 self.check_loaded()
             }
             Self::Message::LoadedDrums(rate, frames) => {
@@ -162,20 +165,22 @@ impl Component for UnderwaterDemo {
                     .add_sound(Sound::from_frames(
                         rate,
                         frames,
-                        PlayableSettings::new()
-                            .semantic_duration(Tempo(85.0).beats_to_seconds(16.0)),
+                        SoundSettings::new().semantic_duration(Tempo(85.0).beats_to_seconds(16.0)),
                     ))
-                    .and_then(|x| {
+                    .ok()
+                    .and_then(|sound| {
                         self.manager
-                            .add_arrangement(Arrangement::new_loop(x.id(), Default::default()))
-                    })
-                    .ok();
+                            .add_arrangement(Arrangement::new_loop(&sound, Default::default()))
+                            .ok()
+                    });
                 self.check_loaded()
             }
             Self::Message::PlayButtonClick => {
                 if let Some(ref mut sequence_handle) = self.sequence_handle {
                     sequence_handle
-                        .stop_sequence_and_instances(StopInstanceSettings::new().fade_tween(Tween::linear(1.0)))
+                        .stop_sequence_and_instances(
+                            StopInstanceSettings::new().fade_tween(Tween::linear(1.0)),
+                        )
                         .ok();
                     self.sequence_handle = None;
                 } else {
