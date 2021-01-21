@@ -3,11 +3,99 @@ use kira::{
     group::{handle::GroupHandle, GroupSet},
     manager::AudioManager,
     metronome::{handle::MetronomeHandle, MetronomeSettings},
+    sequence::{
+        handle::SequenceInstanceHandle, Sequence, SequenceInstanceSettings, SequenceSettings,
+    },
     sound::{handle::SoundHandle, Sound, SoundSettings},
-    Frame, Tempo,
+    Duration, Frame, Tempo,
 };
-use yew::prelude::*;
+use yew::{
+    prelude::*,
+    services::{interval::IntervalTask, IntervalService},
+};
 use yew_router::prelude::*;
+
+#[derive(Debug, Clone, Copy)]
+pub enum DrumFill {
+    TwoBeat,
+    ThreeBeat,
+    FourBeat,
+}
+
+impl DrumFill {
+    fn length(self) -> usize {
+        match self {
+            DrumFill::TwoBeat => 2,
+            DrumFill::ThreeBeat => 3,
+            DrumFill::FourBeat => 4,
+        }
+    }
+
+    fn start_interval(self) -> f64 {
+        match self {
+            DrumFill::FourBeat => 4.0,
+            _ => 1.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Beat {
+    One,
+    Two,
+    Three,
+    Four,
+}
+
+impl Beat {
+    fn as_usize(self) -> usize {
+        match self {
+            Beat::One => 1,
+            Beat::Two => 2,
+            Beat::Three => 3,
+            Beat::Four => 4,
+        }
+    }
+
+    fn fill(self) -> DrumFill {
+        match self {
+            Beat::One => DrumFill::ThreeBeat,
+            Beat::Two => DrumFill::TwoBeat,
+            _ => DrumFill::FourBeat,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DrumFillEvent {
+    Start,
+    Finish,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum PlaybackState {
+    Stopped,
+    PlayingLoop(Beat),
+    QueueingFill(Beat, DrumFill),
+    PlayingFill(Beat, DrumFill),
+}
+
+impl PlaybackState {
+    fn to_string(self) -> String {
+        match self {
+            PlaybackState::Stopped => "Stopped".into(),
+            PlaybackState::PlayingLoop(beat) => {
+                format!("Playing loop (beat {})", beat.as_usize())
+            }
+            PlaybackState::QueueingFill(_, fill) => {
+                format!("Queueing {}-beat drum fill", fill.length())
+            }
+            PlaybackState::PlayingFill(_, fill) => {
+                format!("Playing {}-beat drum fill", fill.length())
+            }
+        }
+    }
+}
 
 pub struct DrumFillDemo {
     link: ComponentLink<Self>,
@@ -20,8 +108,13 @@ pub struct DrumFillDemo {
     manager: AudioManager,
     metronome: MetronomeHandle,
     group: GroupHandle,
+    beat_tracker: Option<SequenceInstanceHandle<Beat>>,
+    loop_sequence: Option<SequenceInstanceHandle<DrumFillEvent>>,
 
     loaded: bool,
+    playback_state: PlaybackState,
+
+    interval_service: IntervalTask,
 }
 
 pub enum Message {
@@ -29,6 +122,11 @@ pub enum Message {
     LoadedFill2b(u32, Vec<Frame>),
     LoadedFill3b(u32, Vec<Frame>),
     LoadedFill4b(u32, Vec<Frame>),
+
+    PlayClick,
+    PlayFillClick,
+
+    PopEvents,
 }
 
 impl Component for DrumFillDemo {
@@ -60,6 +158,11 @@ impl Component for DrumFillDemo {
             .unwrap();
         let group = manager.add_group(Default::default()).unwrap();
 
+        let interval_service = IntervalService::spawn(
+            std::time::Duration::from_secs_f32(1.0 / 30.0),
+            link.callback(|_| Message::PopEvents),
+        );
+
         Self {
             link,
             loop_sound: None,
@@ -69,7 +172,11 @@ impl Component for DrumFillDemo {
             manager,
             metronome,
             group,
+            beat_tracker: None,
+            loop_sequence: None,
             loaded: false,
+            playback_state: PlaybackState::Stopped,
+            interval_service,
         }
     }
 
@@ -119,6 +226,45 @@ impl Component for DrumFillDemo {
                     .ok();
                 self.check_loaded()
             }
+            Message::PlayClick => {
+                match self.playback_state {
+                    PlaybackState::Stopped => {
+                        self.playback_state = PlaybackState::PlayingLoop(Beat::One);
+                        self.beat_tracker = Some(self.start_beat_tracker());
+                        self.loop_sequence = Some(self.start_loop_sequence());
+                        self.metronome.start().unwrap();
+                    }
+                    _ => {
+                        self.group.stop(Default::default()).unwrap();
+                        self.metronome.stop().unwrap();
+                        self.playback_state = PlaybackState::Stopped;
+                        self.beat_tracker = None;
+                        self.loop_sequence = None;
+                    }
+                }
+                true
+            }
+            Message::PlayFillClick => true,
+            Message::PopEvents => {
+                let mut should_render = false;
+                if let Some(beat_tracker) = &mut self.beat_tracker {
+                    while let Some(beat) = beat_tracker.pop_event() {
+                        match &mut self.playback_state {
+                            PlaybackState::Stopped => {}
+                            PlaybackState::PlayingLoop(current_beat) => {
+                                *current_beat = *beat;
+                                should_render = true;
+                            }
+                            PlaybackState::QueueingFill(current_beat, _)
+                            | PlaybackState::PlayingFill(current_beat, _) => {
+                                *current_beat = *beat;
+                                should_render = true;
+                            }
+                        }
+                    }
+                }
+                should_render
+            }
         }
     }
 
@@ -133,6 +279,19 @@ impl Component for DrumFillDemo {
                     <RouterButton<AppRoute> classes="small-button" route=AppRoute::Index>
                         { "Back" }
                     </RouterButton<AppRoute>>
+                    <div class="container">
+                        <div class="button-panel">
+                            <button onclick=self.link.callback(|_| Self::Message::PlayClick)>
+                                { match self.playback_state {
+                                    PlaybackState::Stopped => "Play",
+                                    _ => "Stop",
+                                } }
+                            </button>
+                        </div>
+                        <div class="centered">
+                            { self.playback_state.to_string() }
+                        </div>
+                    </div>
                 </>
             }
         } else {
@@ -157,5 +316,47 @@ impl DrumFillDemo {
 
         self.loaded = true;
         true
+    }
+
+    fn start_beat_tracker(&mut self) -> SequenceInstanceHandle<Beat> {
+        self.manager
+            .start_sequence(
+                {
+                    let mut sequence = Sequence::new(
+                        SequenceSettings::new().groups(GroupSet::new().add(&self.group)),
+                    );
+                    sequence.wait_for_interval(1.0);
+                    sequence.start_loop();
+                    sequence.emit(Beat::One);
+                    sequence.wait(Duration::Beats(1.0));
+                    sequence.emit(Beat::Two);
+                    sequence.wait(Duration::Beats(1.0));
+                    sequence.emit(Beat::Three);
+                    sequence.wait(Duration::Beats(1.0));
+                    sequence.emit(Beat::Four);
+                    sequence.wait(Duration::Beats(1.0));
+                    sequence
+                },
+                SequenceInstanceSettings::new().metronome(&self.metronome),
+            )
+            .unwrap()
+    }
+
+    fn start_loop_sequence(&mut self) -> SequenceInstanceHandle<DrumFillEvent> {
+        self.manager
+            .start_sequence(
+                {
+                    let mut sequence = Sequence::new(
+                        SequenceSettings::new().groups(GroupSet::new().add(&self.group)),
+                    );
+                    sequence.wait_for_interval(1.0);
+                    sequence.start_loop();
+                    sequence.play(self.loop_sound.as_ref().unwrap(), Default::default());
+                    sequence.wait(Duration::Beats(4.0));
+                    sequence
+                },
+                SequenceInstanceSettings::new().metronome(&self.metronome),
+            )
+            .unwrap()
     }
 }
