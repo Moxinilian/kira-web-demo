@@ -1,17 +1,19 @@
-#![recursion_limit="256"]
+#![recursion_limit = "256"]
 
 use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 use yew_router::prelude::*;
 
-mod select_demo;
 mod demos;
+mod select_demo;
 mod utils;
 
 #[derive(Switch, Debug, Clone)]
 pub enum AppRoute {
     #[to = "/underwater-demo"]
     UnderwaterDemo,
+    #[to = "/drum-fill-demo"]
+    DrumFillDemo,
     #[to = "/"]
     Index,
 }
@@ -41,6 +43,7 @@ impl Component for Main {
                     match switch {
                         AppRoute::Index => html!{<select_demo::SelectDemo />},
                         AppRoute::UnderwaterDemo => html!{<demos::UnderwaterDemo />},
+                        AppRoute::DrumFillDemo => html!{<demos::DrumFillDemo />},
                     }
                 })
             />
