@@ -135,7 +135,7 @@ pub struct DrumFillDemo {
     loaded: bool,
     playback_state: PlaybackState,
 
-    interval_service: IntervalTask,
+    _interval_service: IntervalTask,
 }
 
 pub enum Message {
@@ -197,7 +197,7 @@ impl Component for DrumFillDemo {
             loop_sequence: None,
             loaded: false,
             playback_state: PlaybackState::Stopped,
-            interval_service,
+            _interval_service: interval_service,
         }
     }
 

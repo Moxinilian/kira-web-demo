@@ -32,6 +32,10 @@ module.exports = {
             filename: 'underwater-demo/index.html',
             title: 'Kira Web Demo'
         }),
+        new HtmlWebpackPlugin({
+            filename: 'drum-fill-demo/index.html',
+            title: 'Kira Web Demo'
+        }),
         new WasmPackPlugin({
             crateDirectory: path.resolve(__dirname, ".")
         }),
