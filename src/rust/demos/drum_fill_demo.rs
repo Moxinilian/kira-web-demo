@@ -1,4 +1,7 @@
+mod beat_display;
+
 use crate::AppRoute;
+use beat_display::BeatDisplay;
 use kira::{
     group::{handle::GroupHandle, GroupSet},
     manager::AudioManager,
@@ -14,6 +17,16 @@ use yew::{
     services::{interval::IntervalTask, IntervalService},
 };
 use yew_router::prelude::*;
+
+const EXPLANATION_TEXT: &str = "This demo uses \
+a sequence to play a short drum sample repeatedly and \
+keep track of which beat of music is currently playing. \
+This beat is used to determine what kind of drum fill \
+to play.
+
+When the drum fill is triggered, a second sequence waits \
+for the right beat, stops the previous sequence, starts \
+the drum fill, and then starts a new loop.";
 
 #[derive(Debug, Clone, Copy)]
 pub enum DrumFill {
@@ -50,10 +63,10 @@ pub enum Beat {
 impl Beat {
     fn as_usize(self) -> usize {
         match self {
-            Beat::One => 1,
-            Beat::Two => 2,
-            Beat::Three => 3,
-            Beat::Four => 4,
+            Beat::One => 0,
+            Beat::Two => 1,
+            Beat::Three => 2,
+            Beat::Four => 3,
         }
     }
 
@@ -84,14 +97,22 @@ impl PlaybackState {
     fn to_string(self) -> String {
         match self {
             PlaybackState::Stopped => "Stopped".into(),
-            PlaybackState::PlayingLoop(beat) => {
-                format!("Playing loop (beat {})", beat.as_usize())
-            }
+            PlaybackState::PlayingLoop(_) => "Looping".into(),
             PlaybackState::QueueingFill(_, fill) => {
                 format!("Queueing {}-beat drum fill", fill.length())
             }
             PlaybackState::PlayingFill(_, fill) => {
                 format!("Playing {}-beat drum fill", fill.length())
+            }
+        }
+    }
+
+    fn current_beat(self) -> Option<Beat> {
+        match self {
+            PlaybackState::Stopped => None,
+            PlaybackState::PlayingLoop(beat) => Some(beat),
+            PlaybackState::QueueingFill(beat, _) | PlaybackState::PlayingFill(beat, _) => {
+                Some(beat)
             }
         }
     }
@@ -320,8 +341,12 @@ impl Component for DrumFillDemo {
                                 { "Play fill" }
                             </button>
                         </div>
-                        <div class="centered">
+                        <BeatDisplay beat=self.playback_state.current_beat() />
+                        <div class="playback-state-text">
                             { self.playback_state.to_string() }
+                        </div>
+                        <div class="explanation centered">
+                            { EXPLANATION_TEXT }
                         </div>
                     </div>
                 </>
