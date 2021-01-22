@@ -28,6 +28,10 @@ impl Component for SelectDemo {
                 <RouterButton<AppRoute> classes="centered" route=AppRoute::UnderwaterDemo>
                     { "Underwater demo" }
                 </RouterButton<AppRoute>>
+                <br />
+                <RouterButton<AppRoute> classes="centered" route=AppRoute::DrumFillDemo>
+                    { "Drum fill demo" }
+                </RouterButton<AppRoute>>
             </>
         }
     }

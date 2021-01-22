@@ -28,3 +28,6 @@ features = [
   'AudioContext',
   'AudioBuffer',
 ]
+
+[profile.dev]
+opt-level = 3

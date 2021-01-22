@@ -26,6 +26,10 @@ body {
     grid-template-columns: auto auto;
 }
 
+.button-panel button {
+    width: 200px;
+}
+
 .explanation {
     margin-top: 2rem;
     width: 50%;
@@ -33,4 +37,27 @@ body {
     max-width: 800px;
     font-size: 1.4rem;
     text-align: justify;
+}
+
+.beat-display {
+    margin-top: 2rem;
+    display: flex;
+    justify-content: center;
+}
+
+.beat-display-tick {
+    margin: 0 10px;
+    width: 25px;
+    height: 25px;
+    background: white;
+    border-radius: 50%;
+}
+
+.beat-display-tick[filled=true] {
+    background: #e81a53;
+}
+
+.playback-state-text {
+    margin-top: .5rem;
+    font-size: 1.4rem;
 }
