@@ -279,7 +279,7 @@ impl Component for DrumFillDemo {
             Message::PopEvents => {
                 let mut should_render = false;
                 if let Some(beat_tracker) = &mut self.beat_tracker {
-                    while let Some(beat) = beat_tracker.pop_event() {
+                    while let Ok(Some(beat)) = beat_tracker.pop_event() {
                         match &mut self.playback_state {
                             PlaybackState::Stopped => {}
                             PlaybackState::PlayingLoop(current_beat) => {
@@ -295,7 +295,7 @@ impl Component for DrumFillDemo {
                     }
                 }
                 if let Some(sequence) = &mut self.loop_sequence {
-                    while let Some(event) = sequence.pop_event() {
+                    while let Ok(Some(event)) = sequence.pop_event() {
                         match event {
                             DrumFillEvent::Start => {
                                 if let PlaybackState::QueueingFill(beat, fill) = self.playback_state

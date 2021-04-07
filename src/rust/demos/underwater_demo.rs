@@ -5,7 +5,7 @@ use kira::{
     manager::AudioManager,
     mixer::{
         effect::filter::{Filter, FilterSettings},
-        handle::TrackHandle,
+        SubTrackHandle,
     },
     parameter::{handle::ParameterHandle, tween::Tween, Mapping, ParameterSettings},
     sequence::{handle::SequenceInstanceHandle, Sequence},
@@ -31,7 +31,7 @@ pub struct UnderwaterDemo {
     drums: Option<ArrangementHandle>,
 
     manager: AudioManager,
-    lead_track_handle: TrackHandle,
+    lead_track_handle: SubTrackHandle,
     underwater_parameter_handle: ParameterHandle,
     sequence_handle: Option<SequenceInstanceHandle<()>>,
 
@@ -153,7 +153,7 @@ impl Component for UnderwaterDemo {
                             .add_arrangement(Arrangement::new_loop(
                                 &sound,
                                 LoopArrangementSettings::new()
-                                    .default_track(self.lead_track_handle.index()),
+                                    .default_track(self.lead_track_handle.id()),
                             ))
                             .ok()
                     });
